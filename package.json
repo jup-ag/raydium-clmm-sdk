@@ -1,6 +1,6 @@
 {
   "name": "@jup-ag/raydium-clmm-sdk",
-  "version": "1.0.4",
+  "version": "1.0.0",
   "description": "",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -23,7 +23,9 @@
   "dependencies": {
     "@project-serum/anchor": "0.24.2",
     "@project-serum/borsh": "^0.2.5",
-    "@solana/web3.js": "1.31.0",
+    "@solana/buffer-layout": "^4.0.0",
+    "@solana/spl-token": "0.1.8",
+    "@solana/web3.js": "^1.66.2",
     "decimal.js": "^10.3.1"
   }
 }

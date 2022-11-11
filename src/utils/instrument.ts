@@ -1,7 +1,7 @@
-import { bool, struct, u128, u64 } from "@project-serum/borsh";
-import { TOKEN_PROGRAM_ID } from "@project-serum/serum/lib/token-instructions";
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
-import BN from "bn.js";
+import { bool, struct, u128, u64 } from '@project-serum/borsh';
+import { PublicKey, TransactionInstruction } from '@solana/web3.js';
+import BN from 'bn.js';
+import { TOKEN_PROGRAM_ID } from './constants';
 
 export function swapInstruction(
   programId: PublicKey,
@@ -21,10 +21,10 @@ export function swapInstruction(
   isBaseInput: boolean
 ) {
   const dataLayout = struct([
-    u64("amount"),
-    u64("otherAmountThreshold"),
-    u128("sqrtPriceLimitX64"),
-    bool("isBaseInput"),
+    u64('amount'),
+    u64('otherAmountThreshold'),
+    u128('sqrtPriceLimitX64'),
+    bool('isBaseInput'),
   ]);
 
   const keys = [
@@ -41,8 +41,7 @@ export function swapInstruction(
 
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
 
-    ...tickArray
-      .map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+    ...tickArray.map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
   ];
 
   const data = Buffer.alloc(dataLayout.span);

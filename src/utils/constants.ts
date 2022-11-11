@@ -1,4 +1,5 @@
-import BN from "bn.js";
+import { PublicKey } from '@solana/web3.js';
+import BN from 'bn.js';
 
 export const ZERO = new BN(0);
 export const ONE = new BN(1);
@@ -16,16 +17,16 @@ export const MaxUint128 = Q128.subn(1);
 export const MIN_TICK = -307200;
 export const MAX_TICK = -MIN_TICK;
 
-export const MIN_SQRT_PRICE_X64: BN = new BN("3939943522091");
-export const MAX_SQRT_PRICE_X64: BN = new BN("86367321006760116002434269");
+export const MIN_SQRT_PRICE_X64: BN = new BN('3939943522091');
+export const MAX_SQRT_PRICE_X64: BN = new BN('86367321006760116002434269');
 
 export const MIN_TICK_ARRAY_START_INDEX = -307200;
 export const MAX_TICK_ARRAY_START_INDEX = 306600;
 
 export const BIT_PRECISION = 14;
-export const LOG_B_2_X32 = "59543866431248";
-export const LOG_B_P_ERR_MARGIN_LOWER_X64 = "184467440737095516";
-export const LOG_B_P_ERR_MARGIN_UPPER_X64 = "15793534762490258745";
+export const LOG_B_2_X32 = '59543866431248';
+export const LOG_B_P_ERR_MARGIN_LOWER_X64 = '184467440737095516';
+export const LOG_B_P_ERR_MARGIN_UPPER_X64 = '15793534762490258745';
 
 export const FEE_RATE_DENOMINATOR = new BN(10).pow(new BN(6));
 
@@ -39,3 +40,5 @@ export const TICK_SPACINGS: { [amount in Fee]: number } = {
   [Fee.rate_3000]: 60,
   [Fee.rate_10000]: 200,
 };
+
+export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
