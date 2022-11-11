@@ -6,7 +6,7 @@ import { PublicKey } from '@solana/web3.js';
 import { BN } from '@project-serum/anchor';
 import { i128, i32, publicKey, uint128, uint64 } from './layoutUtils';
 
-interface AmmConfig {
+export interface AmmConfig {
   discriminator: number[];
   index: number;
   nothing: PublicKey;
@@ -55,7 +55,7 @@ export const RewardInfo = struct<RewardInfo>([
   uint128('rewardGrowthGlobalX64'),
 ]);
 
-interface PoolInfo {
+export interface PoolInfo {
   bump: number;
   ammConfig: PublicKey;
   mintA: PublicKey;

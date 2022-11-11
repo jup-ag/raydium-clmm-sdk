@@ -1,129 +1,79 @@
-import BN from 'bn.js';
 import JSBI from 'jsbi';
 
-import { Amm } from '@jup-ag/core';
-import { QuoteParams, SwapParams } from '@jup-ag/core/dist/lib/amm';
-import { SwapLegType } from '@jup-ag/core/dist/lib/jupiterEnums';
 import { AccountInfo, AccountMeta, PublicKey } from '@solana/web3.js';
 
 import { AmmV3, AmmV3PoolInfo } from './ammV3';
-import { AmmConfigLayout, PoolInfoLayout, TickArrayLayout } from './utils/layout';
-import { SqrtPriceMath } from './utils/math';
-import { getPdaTickArrayAddress } from './utils/pda';
-import { TickArray, TickUtils } from './utils/tick';
-import { FETCH_TICKARRAY_COUNT } from './utils/tickQuery';
+import { AmmConfigLayout, PoolInfo, PoolInfoLayout, TickArrayLayout } from './utils/layout';
+import { TickArray } from './utils/tick';
+import { BN } from '@project-serum/anchor';
 
 export class RaydiumSwapV3 implements Amm {
   label = 'Raydium' as const;
   id: string;
-  address: PublicKey;
-  poolInfo: AmmV3PoolInfo;
-  ammConfigBuffer: AccountInfo<Buffer> | undefined;
-  tickCacheData;
   reserveTokenMints: PublicKey[];
+  hasDynamicAccounts = true;
+  shouldPrefetch = false;
+  exactOutputSupported = false;
+
+  address: PublicKey;
+  programId: PublicKey;
+  poolInfo: PoolInfo;
+
+  tickArrayPks: PublicKey[];
+  tickArrayCache: { [key: string]: TickArray } = {};
+  ammV3PoolInfo: AmmV3PoolInfo | undefined;
 
   constructor(address: PublicKey, accountInfo: AccountInfo<Buffer>) {
     this.id = address.toBase58();
     this.address = address;
 
-    this.poolInfoBuffer = accountInfo;
-
-    const poolInfo = this.formatPoolInfo();
-
-    this.reserveTokenMints = [poolInfo.mintA.mint, poolInfo.mintB.mint];
-
-    this.tickCacheData = {};
-  }
-
-  formatPoolInfo(ammConfigAccountInfo: AccountInfo<Buffer>): AmmV3PoolInfo {
-    const data = PoolInfoLayout.decode(this.poolInfoBuffer.data);
-    const ammConfigInfo = AmmConfigLayout.decode(ammConfigAccountInfo.data);
-    return {
-      id: this.address,
-      mintA: {
-        mint: data.mintA,
-        vault: data.vaultA,
-        decimals: data.mintDecimalsA,
-      },
-      mintB: {
-        mint: data.mintB,
-        vault: data.vaultB,
-        decimals: data.mintDecimalsB,
-      },
-      observationId: data.observationId,
-      ammConfig: {
-        ...ammConfigInfo,
-        id: data.ammConfig,
-      },
-
-      programId: this.poolInfoBuffer.owner,
-
-      tickSpacing: data.tickSpacing,
-      liquidity: data.liquidity,
-      sqrtPriceX64: data.sqrtPriceX64,
-      currentPrice: SqrtPriceMath.sqrtPriceX64ToPrice(data.sqrtPriceX64, data.mintDecimalsA, data.mintDecimalsB),
-      tickCurrent: data.tickCurrent,
-      observationIndex: data.observationIndex,
-      observationUpdateDuration: data.observationUpdateDuration,
-      tickArrayBitmap: data.tickArrayBitmap,
-    };
+    this.poolInfo = PoolInfoLayout.decode(accountInfo.data);
+    this.reserveTokenMints = [this.poolInfo.mintA, this.poolInfo.mintB];
+    this.programId = accountInfo.owner;
+    this.tickArrayPks = AmmV3.getTickArraysPks(this.poolInfo, this.programId);
   }
 
   getAccountsForUpdate() {
-    const poolInfo = this.formatPoolInfo();
-
-    const needUpdateAccounts = [this.address, poolInfo.ammConfig.id];
-
-    const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap);
-    const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
-      poolInfo.tickCurrent,
-      poolInfo.tickSpacing
-    );
-
-    const startIndexArray = TickUtils.getInitializedTickArrayInRange(
-      tickArrayBitmap,
-      poolInfo.tickSpacing,
-      currentTickArrayStartIndex,
-      Math.floor(FETCH_TICKARRAY_COUNT / 2)
-    );
-    for (const itemIndex of startIndexArray) {
-      const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, itemIndex);
-      needUpdateAccounts.push(tickArrayAddress);
-    }
-
-    return needUpdateAccounts;
+    return [this.address, this.poolInfo.ammConfig, ...this.tickArrayPks];
   }
 
-  update(accountInfoMap: Parameters<Amm['update']>[0]) {
-    const ammConfigId = this.formatPoolInfo().ammConfig.id.toString();
-    const tickCacheData: { [key: string]: TickArray } = {};
+  update(accountInfoMap: Map<string, AccountInfo<Buffer>>) {
+    const poolInfoAccountInfo = accountInfoMap.get(this.id);
+    if (!poolInfoAccountInfo) throw new Error('Missing poolInfoAccountInfo');
+    const ammConfigAccountInfo = accountInfoMap.get(this.poolInfo.ammConfig.toBase58());
+    if (!ammConfigAccountInfo) throw new Error('Missing ammConfigAccoutnInfo');
 
-    for (const [address, accountInfo] of accountInfoMap.entries()) {
-      if (accountInfo === null) continue;
+    this.poolInfo = PoolInfoLayout.decode(poolInfoAccountInfo.data);
+    const ammConfig = AmmConfigLayout.decode(ammConfigAccountInfo.data);
 
-      if (address === this.id) {
-        this.poolInfoBuffer = accountInfo;
-      } else if (address === ammConfigId) {
-        this.ammConfigBuffer = accountInfo;
-      } else {
-        const tickData = TickArrayLayout.decode(accountInfo.data);
-        tickCacheData[tickData.startTickIndex] = {
-          ...tickData,
-          address: new PublicKey(address),
-        };
-      }
+    this.tickArrayPks = AmmV3.getTickArraysPks(this.poolInfo, this.programId);
+    const tickArrayCache: { [key: string]: TickArray } = {};
+    for (const tickArrayPk of this.tickArrayPks) {
+      const tickArrayAccountInfo = accountInfoMap.get(tickArrayPk.toBase58());
+      if (!tickArrayAccountInfo) continue;
+      const tickArray = TickArrayLayout.decode(tickArrayAccountInfo.data);
+      tickArrayCache[tickArray.startTickIndex] = {
+        ...tickArray,
+        address: tickArrayPk,
+      };
     }
 
-    this.tickCacheData = tickCacheData;
+    this.tickArrayCache = tickArrayCache;
+    this.ammV3PoolInfo = AmmV3.formatPoolInfo({
+      address: this.address,
+      poolInfo: this.poolInfo,
+      ammConfig,
+      programId: this.programId,
+    });
   }
 
   getQuote(quoteParams: QuoteParams) {
     if (quoteParams.swapMode !== 'ExactIn') throw Error('ExactOut does not support');
-    if (!this.poolInfo) throw new Error('Missing poolInfo');
+    if (!this.ammV3PoolInfo) throw new Error('Missing ammV3PoolInfo');
 
     const { amountOut, fee, priceImpact } = AmmV3.computeAmountOut({
-      poolInfo: this.poolInfo,
-      tickArrayCache: this.tickCacheData,
+      poolInfo: this.ammV3PoolInfo,
+      tickArrayCache: this.tickArrayCache,
       baseMint: quoteParams.sourceMint,
       amountIn: new BN(quoteParams.amount.toString()),
       slippage: 0,
@@ -134,29 +84,86 @@ export class RaydiumSwapV3 implements Amm {
       outAmount: JSBI.BigInt(amountOut.toString()),
       feeAmount: JSBI.BigInt(fee.toString()),
       feeMint: quoteParams.sourceMint.toString(),
-      feePct: this.poolInfo.ammConfig.tradeFeeRate / 10 ** 6,
+      feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
       priceImpactPct: priceImpact,
     };
   }
 
-  getSwapLegAndAccounts(swapParams: SwapParams): [SwapLegType, AccountMeta[]] {
+  getSwapLegAndAccounts(swapParams: SwapParams): [{}, AccountMeta[]] {
+    if (!this.ammV3PoolInfo) throw new Error('Missing ammV3PoolInfo');
+
+    // Note, the real call should prepend with swap accounts
     const { remainingAccounts } = AmmV3.computeAmountOut({
-      poolInfo: this.poolInfo,
-      tickArrayCache: this.tickCacheData,
+      poolInfo: this.ammV3PoolInfo,
+      tickArrayCache: this.tickArrayCache,
       baseMint: swapParams.sourceMint,
       amountIn: new BN(swapParams.amount.toString()),
       slippage: 0,
     });
     return [
       {},
-      remainingAccounts.map((i) => ({
-        pubkey: i,
+      remainingAccounts.map((pubkey) => ({
+        pubkey,
         isSigner: false,
         isWritable: true,
       })),
     ];
   }
 }
+
+interface Amm {
+  /* Label for UI usage */
+  label: string;
+  /* Unique id to recognize the AMM */
+  id: string;
+  /* Reserve token mints for the purpose of routing */
+  reserveTokenMints: PublicKey[];
+  hasDynamicAccounts: boolean;
+  /* State if we need to prefetch the accounts 1 time */
+  shouldPrefetch: boolean;
+  /* Exact output swap mode is supported */
+  exactOutputSupported: boolean;
+  getAccountsForUpdate(): PublicKey[];
+  update(accountInfoMap: Map<string, AccountInfo<Buffer>>): void;
+  getQuote(quoteParams: QuoteParams): Quote;
+  getSwapLegAndAccounts(swapParams: SwapParams): SwapLegAndAccounts;
+}
+
+enum SwapMode {
+  ExactIn = 'ExactIn',
+  ExactOut = 'ExactOut',
+}
+
+interface QuoteParams {
+  sourceMint: PublicKey;
+  destinationMint: PublicKey;
+  amount: JSBI;
+  swapMode: SwapMode;
+}
+
+interface Quote {
+  notEnoughLiquidity: boolean;
+  minInAmount?: JSBI;
+  minOutAmount?: JSBI;
+  inAmount: JSBI;
+  outAmount: JSBI;
+  feeAmount: JSBI;
+  feeMint: string;
+  feePct: number;
+  priceImpactPct: number;
+}
+
+interface SwapParams {
+  sourceMint: PublicKey;
+  destinationMint: PublicKey;
+  userSourceTokenAccount: PublicKey;
+  userDestinationTokenAccount: PublicKey;
+  userTransferAuthority: PublicKey;
+  amount: JSBI;
+  swapMode: SwapMode;
+}
+
+type SwapLegAndAccounts = [{}, AccountMeta[]];
 
 // ; (async () => {
 //   const poolId = new PublicKey('61R1ndXxvsWXXkWSyNkCxnzwd3zUNB8Q2ibmkiLPC8ht')
