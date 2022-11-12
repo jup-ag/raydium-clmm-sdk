@@ -1,6 +1,6 @@
 {
   "name": "@jup-ag/raydium-clmm-sdk",
-  "version": "1.0.0",
+  "version": "1.0.0-71a2ccc",
   "description": "",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -14,10 +14,6 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@types/chai": "^4.2.15",
-    "@types/mocha": "^8.2.1",
-    "chai": "^4.3.0",
-    "ts-mocha": "^8.0.0",
     "tsup": "^6.4.0",
     "typescript": "^4.4.4"
   },

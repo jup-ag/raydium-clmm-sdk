@@ -30,7 +30,7 @@ export class RaydiumSwapV3 implements Amm {
     this.poolInfo = PoolInfoLayout.decode(accountInfo.data);
     this.reserveTokenMints = [this.poolInfo.mintA, this.poolInfo.mintB];
     this.programId = accountInfo.owner;
-    this.tickArrayPks = AmmV3.getTickArraysPks(this.poolInfo, this.programId);
+    this.tickArrayPks = AmmV3.getTickArrayPks(this.address, this.poolInfo, this.programId);
   }
 
   getAccountsForUpdate() {
@@ -46,7 +46,7 @@ export class RaydiumSwapV3 implements Amm {
     this.poolInfo = PoolInfoLayout.decode(poolInfoAccountInfo.data);
     const ammConfig = AmmConfigLayout.decode(ammConfigAccountInfo.data);
 
-    this.tickArrayPks = AmmV3.getTickArraysPks(this.poolInfo, this.programId);
+    this.tickArrayPks = AmmV3.getTickArrayPks(this.address, this.poolInfo, this.programId);
     const tickArrayCache: { [key: string]: TickArray } = {};
     for (const tickArrayPk of this.tickArrayPks) {
       const tickArrayAccountInfo = accountInfoMap.get(tickArrayPk.toBase58());

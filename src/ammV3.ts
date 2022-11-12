@@ -137,7 +137,7 @@ export class AmmV3 {
     };
   }
 
-  static getTickArraysPks(poolInfo: PoolInfo, programId: PublicKey): PublicKey[] {
+  static getTickArrayPks(address: PublicKey, poolInfo: PoolInfo, programId: PublicKey): PublicKey[] {
     const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap);
     const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
       poolInfo.tickCurrent,
@@ -152,7 +152,7 @@ export class AmmV3 {
       Math.floor(FETCH_TICKARRAY_COUNT / 2)
     );
     for (const itemIndex of startIndexArray) {
-      const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(programId, poolInfo.ammConfig, itemIndex);
+      const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(programId, address, itemIndex);
       tickArrayPks.push(tickArrayAddress);
     }
     return tickArrayPks;
