@@ -3,13 +3,21 @@ import Decimal from 'decimal.js';
 
 import { PublicKey } from '@solana/web3.js';
 
-import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE } from './utils/constants';
+import {
+  AmmConfig,
+  PoolState,
+  TickArrayState,
+} from './types';
+import {
+  MAX_SQRT_PRICE_X64,
+  MIN_SQRT_PRICE_X64,
+  ONE,
+} from './utils/constants';
 import { SqrtPriceMath } from './utils/math';
+import { getPdaTickArrayAddress } from './utils/pda';
 import { PoolUtils } from './utils/pool';
 import { TickUtils } from './utils/tick';
-import { AmmConfig, PoolState, TickArrayState } from './types';
 import { FETCH_TICKARRAY_COUNT } from './utils/tickQuery';
-import { getPdaTickArrayAddress } from './utils/pda';
 
 interface ReturnTypeComputeAmountOut {
   amountOut: BN;
@@ -174,7 +182,7 @@ export class Amm {
       mintA: {
         mint: poolState.tokenMint0,
         vault: poolState.tokenVault0,
-        decimals: poolState.mintDecimals1,
+        decimals: poolState.mintDecimals0,
       },
       mintB: {
         mint: poolState.tokenMint1,
