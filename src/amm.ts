@@ -6,8 +6,8 @@ import { PublicKey } from '@solana/web3.js';
 import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE } from './utils/constants';
 import { SqrtPriceMath } from './utils/math';
 import { PoolUtils } from './utils/pool';
-import { TickArray, TickUtils } from './utils/tick';
-import { AmmConfig, PoolState } from './types';
+import { TickUtils } from './utils/tick';
+import { AmmConfig, PoolState, TickArrayState } from './types';
 import { FETCH_TICKARRAY_COUNT } from './utils/tickQuery';
 import { getPdaTickArrayAddress } from './utils/pda';
 
@@ -80,7 +80,7 @@ export class Amm {
     priceLimit = new Decimal(0),
   }: {
     poolInfo: AmmV3PoolInfo;
-    tickArrayCache: { [key: string]: TickArray };
+    tickArrayCache: { [key: string]: TickArrayState & { address: PublicKey } };
     baseMint: PublicKey;
 
     amountIn: BN;

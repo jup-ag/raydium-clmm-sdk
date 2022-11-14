@@ -1,6 +1,6 @@
 {
   "name": "@jup-ag/raydium-clmm-sdk",
-  "version": "1.0.0-edfa3d1",
+  "version": "1.0.0-8f31831",
   "description": "",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

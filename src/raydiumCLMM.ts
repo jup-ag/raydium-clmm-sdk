@@ -2,11 +2,13 @@ import JSBI from 'jsbi';
 
 import { AccountInfo, AccountMeta, PublicKey } from '@solana/web3.js';
 
-import { Amm, AmmV3PoolInfo } from './amm';
+import { Amm as RaydiumSdkAmm, AmmV3PoolInfo } from './amm';
 import { TickArray } from './utils/tick';
 import { BN, BorshAccountsCoder } from '@project-serum/anchor';
 import { PoolState } from './types';
 import { IDL, AmmV3 as AmmV3Idl } from './idl/amm_v3';
+
+type TickArrayCache = { [key: string]: TickArray };
 
 export class RaydiumSwapV3 implements Amm {
   label = 'Raydium' as const;
@@ -21,7 +23,7 @@ export class RaydiumSwapV3 implements Amm {
   private coder: BorshAccountsCoder;
 
   tickArrayPks: PublicKey[];
-  tickArrayCache: { [key: string]: TickArray } = {};
+  tickArrayCache: TickArrayCache = {};
   ammV3PoolInfo: AmmV3PoolInfo | undefined;
 
   constructor(private address: PublicKey, accountInfo: AccountInfo<Buffer>) {
@@ -33,7 +35,7 @@ export class RaydiumSwapV3 implements Amm {
     this.poolState = this.coder.decode('poolState', accountInfo.data);
     this.reserveTokenMints = [this.poolState.tokenMint0, this.poolState.tokenMint1];
     this.programId = accountInfo.owner;
-    this.tickArrayPks = Amm.getTickArrayPks(this.address, this.poolState, this.programId);
+    this.tickArrayPks = RaydiumSdkAmm.getTickArrayPks(this.address, this.poolState, this.programId);
   }
 
   getAccountsForUpdate() {
@@ -49,8 +51,8 @@ export class RaydiumSwapV3 implements Amm {
     this.poolState = this.coder.decode('poolState', poolStateAccountInfo.data);
     const ammConfig = this.coder.decode('ammConfig', ammConfigAccountInfo.data);
 
-    this.tickArrayPks = Amm.getTickArrayPks(this.address, this.poolState, this.programId);
-    const tickArrayCache: { [key: string]: TickArray } = {};
+    this.tickArrayPks = RaydiumSdkAmm.getTickArrayPks(this.address, this.poolState, this.programId);
+    const tickArrayCache: TickArrayCache = {};
     for (const tickArrayPk of this.tickArrayPks) {
       const tickArrayAccountInfo = accountInfoMap.get(tickArrayPk.toBase58());
       if (!tickArrayAccountInfo) continue;
@@ -62,7 +64,7 @@ export class RaydiumSwapV3 implements Amm {
     }
 
     this.tickArrayCache = tickArrayCache;
-    this.ammV3PoolInfo = Amm.formatPoolInfo({
+    this.ammV3PoolInfo = RaydiumSdkAmm.formatPoolInfo({
       address: this.address,
       poolState: this.poolState,
       ammConfig,
@@ -74,7 +76,7 @@ export class RaydiumSwapV3 implements Amm {
     if (quoteParams.swapMode !== 'ExactIn') throw Error('ExactOut does not support');
     if (!this.ammV3PoolInfo) throw new Error('Missing ammV3PoolInfo');
 
-    const { amountOut, fee, priceImpact } = AmmV3.computeAmountOut({
+    const { amountOut, fee, priceImpact } = RaydiumSdkAmm.computeAmountOut({
       poolInfo: this.ammV3PoolInfo,
       tickArrayCache: this.tickArrayCache,
       baseMint: quoteParams.sourceMint,
@@ -96,7 +98,7 @@ export class RaydiumSwapV3 implements Amm {
     if (!this.ammV3PoolInfo) throw new Error('Missing ammV3PoolInfo');
 
     // Note, the real call should prepend with swap accounts
-    const { remainingAccounts } = Amm.computeAmountOut({
+    const { remainingAccounts } = RaydiumSdkAmm.computeAmountOut({
       poolInfo: this.ammV3PoolInfo,
       tickArrayCache: this.tickArrayCache,
       baseMint: swapParams.sourceMint,

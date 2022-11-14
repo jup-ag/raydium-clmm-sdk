@@ -1,8 +1,9 @@
-import { PublicKey } from "@solana/web3.js";
-import BN from "bn.js";
+import { PublicKey } from '@solana/web3.js';
+import BN from 'bn.js';
+import { TickArrayState } from '../types';
 
-export const TICK_ARRAY_SIZE = 60
-export const TICK_ARRAY_BITMAP_SIZE = 1024
+export const TICK_ARRAY_SIZE = 60;
+export const TICK_ARRAY_BITMAP_SIZE = 1024;
 
 export type Tick = {
   tick: number;
@@ -11,78 +12,41 @@ export type Tick = {
   feeGrowthOutsideX64A: BN;
   feeGrowthOutsideX64B: BN;
   rewardGrowthsOutsideX64: BN[];
-}
+};
 
-export type TickArray = {
-  address: PublicKey
-  poolId: PublicKey;
-  startTickIndex: number
-  ticks: Tick[]
-  initializedTickCount: number;
-}
-
-export type TickState = {
-  tick: number
-  liquidityNet: BN
-  liquidityGross: BN
-  feeGrowthOutsideX64A: BN
-  feeGrowthOutsideX64B: BN
-  tickCumulativeOutside: BN
-  secondsPerLiquidityOutsideX64: BN
-  secondsOutside: number
-  rewardGrowthsOutside: BN[]
-}
-
-export type TickArrayState = {
-  ammPool: PublicKey
-  startTickIndex: number
-  ticks: TickState[]
-  initializedTickCount: number
-}
+export type TickArray = TickArrayState & { address: PublicKey };
 
 export class TickUtils {
-  public static getTickArrayStartIndexByTick(
-    tickIndex: number,
-    tickSpacing: number
-  ) {
-    let startIndex: number = tickIndex / (TICK_ARRAY_SIZE * tickSpacing)
+  public static getTickArrayStartIndexByTick(tickIndex: number, tickSpacing: number) {
+    let startIndex: number = tickIndex / (TICK_ARRAY_SIZE * tickSpacing);
     if (tickIndex < 0 && tickIndex % (TICK_ARRAY_SIZE * tickSpacing) != 0) {
-      startIndex = Math.ceil(startIndex) - 1
+      startIndex = Math.ceil(startIndex) - 1;
     } else {
-      startIndex = Math.floor(startIndex)
+      startIndex = Math.floor(startIndex);
     }
-    return startIndex * (tickSpacing * TICK_ARRAY_SIZE)
+    return startIndex * (tickSpacing * TICK_ARRAY_SIZE);
   }
 
-  public static getTickArrayOffsetInBitmapByTick(
-    tick: number,
-    tickSpacing: number
-  ) {
-    const multiplier = tickSpacing * TICK_ARRAY_SIZE
-    const compressed = Math.floor(tick / multiplier) + 512
-    return Math.abs(compressed)
+  public static getTickArrayOffsetInBitmapByTick(tick: number, tickSpacing: number) {
+    const multiplier = tickSpacing * TICK_ARRAY_SIZE;
+    const compressed = Math.floor(tick / multiplier) + 512;
+    return Math.abs(compressed);
   }
 
-  public static checkTickArrayIsInitialized(
-    bitmap: BN,
-    tick: number,
-    tickSpacing: number
-  ) {
-    const multiplier = tickSpacing * TICK_ARRAY_SIZE
-    const compressed = Math.floor(tick / multiplier) + 512
-    const bit_pos = Math.abs(compressed)
+  public static checkTickArrayIsInitialized(bitmap: BN, tick: number, tickSpacing: number) {
+    const multiplier = tickSpacing * TICK_ARRAY_SIZE;
+    const compressed = Math.floor(tick / multiplier) + 512;
+    const bit_pos = Math.abs(compressed);
     return {
       isInitialized: bitmap.testn(bit_pos),
-      startIndex: (bit_pos - 512) * multiplier
-    }
+      startIndex: (bit_pos - 512) * multiplier,
+    };
   }
 
-  public static getNextTickArrayStartIndex(
-    lastTickArrayStartIndex: number,
-    tickSpacing: number,
-    zeroForOne: boolean
-  ) {
-    return zeroForOne ? lastTickArrayStartIndex - tickSpacing * TICK_ARRAY_SIZE : lastTickArrayStartIndex + tickSpacing * TICK_ARRAY_SIZE
+  public static getNextTickArrayStartIndex(lastTickArrayStartIndex: number, tickSpacing: number, zeroForOne: boolean) {
+    return zeroForOne
+      ? lastTickArrayStartIndex - tickSpacing * TICK_ARRAY_SIZE
+      : lastTickArrayStartIndex + tickSpacing * TICK_ARRAY_SIZE;
   }
 
   public static mergeTickArrayBitmap(bns: BN[]) {
@@ -101,7 +65,7 @@ export class TickUtils {
       .add(bns[12].shln(768))
       .add(bns[13].shln(832))
       .add(bns[14].shln(896))
-      .add(bns[15].shln(960))
+      .add(bns[15].shln(960));
   }
 
   public static getInitializedTickArrayInRange(
@@ -111,18 +75,12 @@ export class TickUtils {
     expectedCount: number
   ) {
     if (tickArrayStartIndex % (tickSpacing * TICK_ARRAY_SIZE) != 0) {
-      throw new Error('Invild tickArrayStartIndex')
+      throw new Error('Invild tickArrayStartIndex');
     }
-    const tickArrayOffset = Math.floor(tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE)) + 512
+    const tickArrayOffset = Math.floor(tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE)) + 512;
     return [
       // find right of currenct offset
-      ...TickUtils.searchLowBitFromStart(
-        tickArrayBitmap,
-        tickArrayOffset - 1,
-        0,
-        expectedCount,
-        tickSpacing
-      ),
+      ...TickUtils.searchLowBitFromStart(tickArrayBitmap, tickArrayOffset - 1, 0, expectedCount, tickSpacing),
 
       // find left of current offset
       ...TickUtils.searchHightBitFromStart(
@@ -131,8 +89,8 @@ export class TickUtils {
         TICK_ARRAY_BITMAP_SIZE,
         expectedCount,
         tickSpacing
-      )
-    ]
+      ),
+    ];
   }
 
   public static searchLowBitFromStart(
@@ -142,19 +100,19 @@ export class TickUtils {
     expectedCount: number,
     tickSpacing: number
   ) {
-    let fetchNum = 0
-    const result: number[] = []
+    let fetchNum = 0;
+    const result: number[] = [];
     for (let i = start; i >= end; i--) {
       if (tickArrayBitmap.shrn(i).and(new BN(1)).eqn(1)) {
-        const nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE)
-        result.push(nextStartIndex)
-        fetchNum++
+        const nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
+        result.push(nextStartIndex);
+        fetchNum++;
       }
       if (fetchNum >= expectedCount) {
-        break
+        break;
       }
     }
-    return result
+    return result;
   }
 
   public static searchHightBitFromStart(
@@ -164,18 +122,18 @@ export class TickUtils {
     expectedCount: number,
     tickSpacing: number
   ) {
-    let fetchNum = 0
-    const result: number[] = []
+    let fetchNum = 0;
+    const result: number[] = [];
     for (let i = start; i < end; i++) {
       if (tickArrayBitmap.shrn(i).and(new BN(1)).eqn(1)) {
-        const nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE)
-        result.push(nextStartIndex)
-        fetchNum++
+        const nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
+        result.push(nextStartIndex);
+        fetchNum++;
       }
       if (fetchNum >= expectedCount) {
-        break
+        break;
       }
     }
-    return result
+    return result;
   }
 }
