@@ -2,10 +2,11 @@ import JSBI from 'jsbi';
 
 import { AccountInfo, AccountMeta, PublicKey } from '@solana/web3.js';
 
-import { AmmV3, AmmV3PoolInfo } from './ammV3';
-import { AmmConfigLayout, PoolInfo, PoolInfoLayout, TickArrayLayout } from './utils/layout';
+import { Amm, AmmV3PoolInfo } from './amm';
 import { TickArray } from './utils/tick';
-import { BN } from '@project-serum/anchor';
+import { BN, BorshAccountsCoder } from '@project-serum/anchor';
+import { PoolState } from './types';
+import { IDL, AmmV3 as AmmV3Idl } from './idl/amm_v3';
 
 export class RaydiumSwapV3 implements Amm {
   label = 'Raydium' as const;
@@ -15,43 +16,45 @@ export class RaydiumSwapV3 implements Amm {
   shouldPrefetch = false;
   exactOutputSupported = false;
 
-  address: PublicKey;
-  programId: PublicKey;
-  poolInfo: PoolInfo;
+  private programId: PublicKey;
+  private poolState: PoolState;
+  private coder: BorshAccountsCoder;
 
   tickArrayPks: PublicKey[];
   tickArrayCache: { [key: string]: TickArray } = {};
   ammV3PoolInfo: AmmV3PoolInfo | undefined;
 
-  constructor(address: PublicKey, accountInfo: AccountInfo<Buffer>) {
+  constructor(private address: PublicKey, accountInfo: AccountInfo<Buffer>) {
     this.id = address.toBase58();
     this.address = address;
 
-    this.poolInfo = PoolInfoLayout.decode(accountInfo.data);
-    this.reserveTokenMints = [this.poolInfo.mintA, this.poolInfo.mintB];
+    this.coder = new BorshAccountsCoder(IDL as AmmV3Idl);
+
+    this.poolState = this.coder.decode('poolState', accountInfo.data);
+    this.reserveTokenMints = [this.poolState.tokenMint0, this.poolState.tokenMint1];
     this.programId = accountInfo.owner;
-    this.tickArrayPks = AmmV3.getTickArrayPks(this.address, this.poolInfo, this.programId);
+    this.tickArrayPks = Amm.getTickArrayPks(this.address, this.poolState, this.programId);
   }
 
   getAccountsForUpdate() {
-    return [this.address, this.poolInfo.ammConfig, ...this.tickArrayPks];
+    return [this.address, this.poolState.ammConfig, ...this.tickArrayPks];
   }
 
   update(accountInfoMap: Map<string, AccountInfo<Buffer>>) {
-    const poolInfoAccountInfo = accountInfoMap.get(this.id);
-    if (!poolInfoAccountInfo) throw new Error('Missing poolInfoAccountInfo');
-    const ammConfigAccountInfo = accountInfoMap.get(this.poolInfo.ammConfig.toBase58());
+    const poolStateAccountInfo = accountInfoMap.get(this.id);
+    if (!poolStateAccountInfo) throw new Error('Missing poolStateAccountInfo');
+    const ammConfigAccountInfo = accountInfoMap.get(this.poolState.ammConfig.toBase58());
     if (!ammConfigAccountInfo) throw new Error('Missing ammConfigAccoutnInfo');
 
-    this.poolInfo = PoolInfoLayout.decode(poolInfoAccountInfo.data);
-    const ammConfig = AmmConfigLayout.decode(ammConfigAccountInfo.data);
+    this.poolState = this.coder.decode('poolState', poolStateAccountInfo.data);
+    const ammConfig = this.coder.decode('ammConfig', ammConfigAccountInfo.data);
 
-    this.tickArrayPks = AmmV3.getTickArrayPks(this.address, this.poolInfo, this.programId);
+    this.tickArrayPks = Amm.getTickArrayPks(this.address, this.poolState, this.programId);
     const tickArrayCache: { [key: string]: TickArray } = {};
     for (const tickArrayPk of this.tickArrayPks) {
       const tickArrayAccountInfo = accountInfoMap.get(tickArrayPk.toBase58());
       if (!tickArrayAccountInfo) continue;
-      const tickArray = TickArrayLayout.decode(tickArrayAccountInfo.data);
+      const tickArray = this.coder.decode('tickArrayState', tickArrayAccountInfo.data);
       tickArrayCache[tickArray.startTickIndex] = {
         ...tickArray,
         address: tickArrayPk,
@@ -59,9 +62,9 @@ export class RaydiumSwapV3 implements Amm {
     }
 
     this.tickArrayCache = tickArrayCache;
-    this.ammV3PoolInfo = AmmV3.formatPoolInfo({
+    this.ammV3PoolInfo = Amm.formatPoolInfo({
       address: this.address,
-      poolInfo: this.poolInfo,
+      poolState: this.poolState,
       ammConfig,
       programId: this.programId,
     });
@@ -93,7 +96,7 @@ export class RaydiumSwapV3 implements Amm {
     if (!this.ammV3PoolInfo) throw new Error('Missing ammV3PoolInfo');
 
     // Note, the real call should prepend with swap accounts
-    const { remainingAccounts } = AmmV3.computeAmountOut({
+    const { remainingAccounts } = Amm.computeAmountOut({
       poolInfo: this.ammV3PoolInfo,
       tickArrayCache: this.tickArrayCache,
       baseMint: swapParams.sourceMint,

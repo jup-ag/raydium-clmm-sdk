@@ -7,7 +7,7 @@ import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE } from './utils/constants';
 import { SqrtPriceMath } from './utils/math';
 import { PoolUtils } from './utils/pool';
 import { TickArray, TickUtils } from './utils/tick';
-import { AmmConfig, PoolInfo } from './utils/layout';
+import { AmmConfig, PoolState } from './types';
 import { FETCH_TICKARRAY_COUNT } from './utils/tickQuery';
 import { getPdaTickArrayAddress } from './utils/pda';
 
@@ -70,7 +70,7 @@ export interface AmmV3PoolInfo {
   tickArrayBitmap: BN[];
 }
 
-export class AmmV3 {
+export class Amm {
   static computeAmountOut({
     poolInfo,
     tickArrayCache,
@@ -137,17 +137,17 @@ export class AmmV3 {
     };
   }
 
-  static getTickArrayPks(address: PublicKey, poolInfo: PoolInfo, programId: PublicKey): PublicKey[] {
-    const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap);
+  static getTickArrayPks(address: PublicKey, poolState: PoolState, programId: PublicKey): PublicKey[] {
+    const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(poolState.tickArrayBitmap);
     const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
-      poolInfo.tickCurrent,
-      poolInfo.tickSpacing
+      poolState.tickCurrent,
+      poolState.tickSpacing
     );
 
     const tickArrayPks: PublicKey[] = [];
     const startIndexArray = TickUtils.getInitializedTickArrayInRange(
       tickArrayBitmap,
-      poolInfo.tickSpacing,
+      poolState.tickSpacing,
       currentTickArrayStartIndex,
       Math.floor(FETCH_TICKARRAY_COUNT / 2)
     );
@@ -160,47 +160,47 @@ export class AmmV3 {
 
   static formatPoolInfo({
     address,
-    poolInfo,
+    poolState,
     ammConfig,
     programId,
   }: {
     address: PublicKey;
-    poolInfo: PoolInfo;
+    poolState: PoolState;
     ammConfig: AmmConfig;
     programId: PublicKey;
   }): AmmV3PoolInfo {
     return {
       id: address,
       mintA: {
-        mint: poolInfo.mintA,
-        vault: poolInfo.vaultA,
-        decimals: poolInfo.mintDecimalsA,
+        mint: poolState.tokenMint0,
+        vault: poolState.tokenVault0,
+        decimals: poolState.mintDecimals1,
       },
       mintB: {
-        mint: poolInfo.mintB,
-        vault: poolInfo.vaultB,
-        decimals: poolInfo.mintDecimalsB,
+        mint: poolState.tokenMint1,
+        vault: poolState.tokenVault1,
+        decimals: poolState.mintDecimals1,
       },
-      observationId: poolInfo.observationId,
+      observationId: poolState.observationKey,
       ammConfig: {
         ...ammConfig,
-        id: poolInfo.ammConfig,
+        id: poolState.ammConfig,
       },
 
       programId,
 
-      tickSpacing: poolInfo.tickSpacing,
-      liquidity: poolInfo.liquidity,
-      sqrtPriceX64: poolInfo.sqrtPriceX64,
+      tickSpacing: poolState.tickSpacing,
+      liquidity: poolState.liquidity,
+      sqrtPriceX64: poolState.sqrtPriceX64,
       currentPrice: SqrtPriceMath.sqrtPriceX64ToPrice(
-        poolInfo.sqrtPriceX64,
-        poolInfo.mintDecimalsA,
-        poolInfo.mintDecimalsB
+        poolState.sqrtPriceX64,
+        poolState.mintDecimals0,
+        poolState.mintDecimals1
       ),
-      tickCurrent: poolInfo.tickCurrent,
-      observationIndex: poolInfo.observationIndex,
-      observationUpdateDuration: poolInfo.observationUpdateDuration,
-      tickArrayBitmap: poolInfo.tickArrayBitmap,
+      tickCurrent: poolState.tickCurrent,
+      observationIndex: poolState.observationIndex,
+      observationUpdateDuration: poolState.observationUpdateDuration,
+      tickArrayBitmap: poolState.tickArrayBitmap,
     };
   }
 }
