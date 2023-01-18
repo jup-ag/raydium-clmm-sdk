@@ -1,12 +1,25 @@
 import JSBI from 'jsbi';
 
-import { AccountInfo, AccountMeta, PublicKey } from '@solana/web3.js';
+import {
+  BN,
+  BorshAccountsCoder,
+} from '@project-serum/anchor';
+import {
+  AccountInfo,
+  AccountMeta,
+  PublicKey,
+} from '@solana/web3.js';
 
-import { Amm as RaydiumSdkAmm, AmmV3PoolInfo } from './amm';
-import { TickArray } from './utils/tick';
-import { BN, BorshAccountsCoder } from '@project-serum/anchor';
+import {
+  Amm as RaydiumSdkAmm,
+  AmmV3PoolInfo,
+} from './amm';
+import {
+  AmmV3 as AmmV3Idl,
+  IDL,
+} from './idl/amm_v3';
 import { PoolState } from './types';
-import { IDL, AmmV3 as AmmV3Idl } from './idl/amm_v3';
+import { TickArray } from './utils/tick';
 
 type TickArrayCache = { [key: string]: TickArray };
 
@@ -73,25 +86,43 @@ export class RaydiumSwapV3 implements Amm {
   }
 
   getQuote(quoteParams: QuoteParams) {
-    if (quoteParams.swapMode !== 'ExactIn') throw Error('ExactOut does not support');
     if (!this.ammV3PoolInfo) throw new Error('Missing ammV3PoolInfo');
 
-    const { amountOut, fee, priceImpact } = RaydiumSdkAmm.computeAmountOut({
-      poolInfo: this.ammV3PoolInfo,
-      tickArrayCache: this.tickArrayCache,
-      baseMint: quoteParams.sourceMint,
-      amountIn: new BN(quoteParams.amount.toString()),
-      slippage: 0,
-    });
-    return {
-      notEnoughLiquidity: false,
-      inAmount: quoteParams.amount,
-      outAmount: JSBI.BigInt(amountOut.toString()),
-      feeAmount: JSBI.BigInt(fee.toString()),
-      feeMint: quoteParams.sourceMint.toString(),
-      feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
-      priceImpactPct: priceImpact,
-    };
+    if (quoteParams.swapMode === 'ExactIn') {
+      const { amountOut, fee, priceImpact } = RaydiumSdkAmm.computeAmountOut({
+        poolInfo: this.ammV3PoolInfo,
+        tickArrayCache: this.tickArrayCache,
+        baseMint: quoteParams.sourceMint,
+        amountIn: new BN(quoteParams.amount.toString()),
+        slippage: 0,
+      });
+      return {
+        notEnoughLiquidity: false,
+        inAmount: quoteParams.amount,
+        outAmount: JSBI.BigInt(amountOut.toString()),
+        feeAmount: JSBI.BigInt(fee.toString()),
+        feeMint: quoteParams.sourceMint.toString(),
+        feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
+        priceImpactPct: priceImpact,
+      };
+    } else {
+      const { amountIn, fee, priceImpact } = RaydiumSdkAmm.computeAmountIn({
+        poolInfo: this.ammV3PoolInfo,
+        tickArrayCache: this.tickArrayCache,
+        baseMint: quoteParams.sourceMint,
+        amountOut: new BN(quoteParams.amount.toString()),
+        slippage: 0,
+      });
+      return {
+        notEnoughLiquidity: false,
+        inAmount: JSBI.BigInt(amountIn.toString()),
+        outAmount: quoteParams.amount,
+        feeAmount: JSBI.BigInt(fee.toString()),
+        feeMint: quoteParams.destinationMint.toString(),
+        feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
+        priceImpactPct: priceImpact,
+      };
+    }
   }
 
   getSwapLegAndAccounts(swapParams: SwapParams): [{}, AccountMeta[]] {

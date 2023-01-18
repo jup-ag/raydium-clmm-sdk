@@ -28,6 +28,15 @@ interface ReturnTypeComputeAmountOut {
   fee: BN;
   remainingAccounts: PublicKey[];
 }
+interface ReturnTypeComputeAmountOutBaseOut {
+  amountIn: BN,
+  maxAmountIn: BN,
+  currentPrice: Decimal,
+  executionPrice: Decimal,
+  priceImpact: number,
+  fee: BN,
+  remainingAccounts: PublicKey[]
+}
 
 export interface AmmV3ConfigInfo {
   id: PublicKey;
@@ -143,6 +152,59 @@ export class Amm {
 
       remainingAccounts,
     };
+  }
+
+  static computeAmountIn(
+    { poolInfo, tickArrayCache, baseMint, amountOut, slippage, priceLimit = new Decimal(0) }: {
+      poolInfo: AmmV3PoolInfo,
+      tickArrayCache: { [key: string]: TickArrayState & { address: PublicKey } },
+      baseMint: PublicKey,
+
+      amountOut: BN,
+      slippage: number,
+      priceLimit?: Decimal
+    }
+  ): ReturnTypeComputeAmountOutBaseOut {
+    let sqrtPriceLimitX64: BN;
+    if (priceLimit.equals(new Decimal(0))) {
+      sqrtPriceLimitX64 = baseMint.equals(poolInfo.mintB.mint)
+        ? MIN_SQRT_PRICE_X64.add(ONE)
+        : MAX_SQRT_PRICE_X64.sub(ONE);
+    } else {
+      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+        priceLimit,
+        poolInfo.mintA.decimals,
+        poolInfo.mintB.decimals
+      );
+    }
+
+    const { expectedAmountIn, remainingAccounts, executionPrice: _executionPriceX64, feeAmount } = PoolUtils.getInputAmountAndRemainAccounts(
+      poolInfo,
+      tickArrayCache,
+      baseMint,
+      amountOut,
+      sqrtPriceLimitX64
+    );
+
+    const _executionPrice = SqrtPriceMath.sqrtPriceX64ToPrice(_executionPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals)
+    const executionPrice = baseMint.equals(poolInfo.mintA.mint) ? _executionPrice : new Decimal(1).div(_executionPrice)
+
+    const maxAmountIn = expectedAmountIn.mul(new BN(Math.floor((1 + slippage) * 10000000000))).div(new BN(10000000000));
+
+    const poolPrice = poolInfo.mintA.mint.equals(baseMint) ? poolInfo.currentPrice : new Decimal(1).div(poolInfo.currentPrice)
+    const priceImpact = Math.abs(parseFloat(executionPrice.toFixed()) - parseFloat(poolPrice.toFixed())) /
+      parseFloat(poolPrice.toFixed());
+
+    return {
+      amountIn: expectedAmountIn,
+      maxAmountIn,
+      currentPrice: poolInfo.currentPrice,
+      executionPrice,
+      priceImpact,
+      fee: feeAmount,
+
+      remainingAccounts
+    }
   }
 
   static getTickArrayPks(address: PublicKey, poolState: PoolState, programId: PublicKey): PublicKey[] {
