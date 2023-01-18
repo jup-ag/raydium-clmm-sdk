@@ -1,23 +1,10 @@
 import JSBI from 'jsbi';
 
-import {
-  BN,
-  BorshAccountsCoder,
-} from '@project-serum/anchor';
-import {
-  AccountInfo,
-  AccountMeta,
-  PublicKey,
-} from '@solana/web3.js';
+import { BN, BorshAccountsCoder } from '@project-serum/anchor';
+import { AccountInfo, AccountMeta, PublicKey } from '@solana/web3.js';
 
-import {
-  Amm as RaydiumSdkAmm,
-  AmmV3PoolInfo,
-} from './amm';
-import {
-  AmmV3 as AmmV3Idl,
-  IDL,
-} from './idl/amm_v3';
+import { Amm as RaydiumSdkAmm, AmmV3PoolInfo } from './amm';
+import { AmmV3 as AmmV3Idl, IDL } from './idl/amm_v3';
 import { PoolState } from './types';
 import { TickArray } from './utils/tick';
 
@@ -118,7 +105,7 @@ export class RaydiumSwapV3 implements Amm {
         inAmount: JSBI.BigInt(amountIn.toString()),
         outAmount: quoteParams.amount,
         feeAmount: JSBI.BigInt(fee.toString()),
-        feeMint: quoteParams.destinationMint.toString(),
+        feeMint: quoteParams.sourceMint.toString(),
         feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
         priceImpactPct: priceImpact,
       };
