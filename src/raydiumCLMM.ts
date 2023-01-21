@@ -96,7 +96,7 @@ export class RaydiumSwapV3 implements Amm {
       const { amountIn, fee, priceImpact } = RaydiumSdkAmm.computeAmountIn({
         poolInfo: this.ammV3PoolInfo,
         tickArrayCache: this.tickArrayCache,
-        baseMint: quoteParams.sourceMint,
+        baseMint: quoteParams.destinationMint,
         amountOut: new BN(quoteParams.amount.toString()),
         slippage: 0,
       });
