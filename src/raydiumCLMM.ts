@@ -89,39 +89,69 @@ export class RaydiumSwapV3 implements Amm {
     if (!this.ammV3PoolInfo) throw new Error('Missing ammV3PoolInfo');
 
     if (quoteParams.swapMode === 'ExactIn') {
-      const { amountOut, fee, priceImpact } = RaydiumSdkAmm.computeAmountOut({
-        poolInfo: this.ammV3PoolInfo,
-        tickArrayCache: this.tickArrayCache,
-        baseMint: quoteParams.sourceMint,
-        amountIn: new BN(quoteParams.amount.toString()),
-        slippage: 0,
-      });
-      return {
-        notEnoughLiquidity: false,
-        inAmount: quoteParams.amount,
-        outAmount: JSBI.BigInt(amountOut.toString()),
-        feeAmount: JSBI.BigInt(fee.toString()),
-        feeMint: quoteParams.sourceMint.toString(),
-        feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
-        priceImpactPct: priceImpact,
-      };
+      try {
+        const { amountOut, fee, priceImpact } = RaydiumSdkAmm.computeAmountOut({
+          poolInfo: this.ammV3PoolInfo,
+          tickArrayCache: this.tickArrayCache,
+          baseMint: quoteParams.sourceMint,
+          amountIn: new BN(quoteParams.amount.toString()),
+          slippage: 0,
+        });
+        return {
+          notEnoughLiquidity: false,
+          inAmount: quoteParams.amount,
+          outAmount: JSBI.BigInt(amountOut.toString()),
+          feeAmount: JSBI.BigInt(fee.toString()),
+          feeMint: quoteParams.sourceMint.toString(),
+          feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
+          priceImpactPct: priceImpact,
+        };
+      } catch(e) {
+        if (e.message === 'liquidity limit') {
+          return {
+            notEnoughLiquidity: true,
+            inAmount: quoteParams.amount,
+            outAmount: JSBI.BigInt(0),
+            feeAmount: JSBI.BigInt(0),
+            feeMint: quoteParams.sourceMint.toString(),
+            feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
+            priceImpactPct: 0,
+          };
+        }
+        throw e
+      }
     } else {
-      const { amountIn, fee, priceImpact } = RaydiumSdkAmm.computeAmountIn({
-        poolInfo: this.ammV3PoolInfo,
-        tickArrayCache: this.tickArrayCache,
-        baseMint: quoteParams.destinationMint,
-        amountOut: new BN(quoteParams.amount.toString()),
-        slippage: 0,
-      });
-      return {
-        notEnoughLiquidity: false,
-        inAmount: JSBI.BigInt(amountIn.toString()),
-        outAmount: quoteParams.amount,
-        feeAmount: JSBI.BigInt(fee.toString()),
-        feeMint: quoteParams.sourceMint.toString(),
-        feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
-        priceImpactPct: priceImpact,
-      };
+      try {
+        const { amountIn, fee, priceImpact } = RaydiumSdkAmm.computeAmountIn({
+          poolInfo: this.ammV3PoolInfo,
+          tickArrayCache: this.tickArrayCache,
+          baseMint: quoteParams.destinationMint,
+          amountOut: new BN(quoteParams.amount.toString()),
+          slippage: 0,
+        });
+        return {
+          notEnoughLiquidity: false,
+          inAmount: JSBI.BigInt(amountIn.toString()),
+          outAmount: quoteParams.amount,
+          feeAmount: JSBI.BigInt(fee.toString()),
+          feeMint: quoteParams.sourceMint.toString(),
+          feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
+          priceImpactPct: priceImpact,
+        };
+      } catch(e) {
+        if (e.message === 'liquidity limit') {
+          return {
+            notEnoughLiquidity: true,
+            inAmount: quoteParams.amount,
+            outAmount: JSBI.BigInt(0),
+            feeAmount: JSBI.BigInt(0),
+            feeMint: quoteParams.sourceMint.toString(),
+            feePct: this.ammV3PoolInfo.ammConfig.tradeFeeRate / 10 ** 6,
+            priceImpactPct: 0,
+          };
+        }
+        throw e
+      }
     }
   }
 
