@@ -31,6 +31,16 @@ export class PoolUtils {
       throw new Error('Invalid tick array');
     }
 
+    const preTick = this.preInitializedTickArrayStartIndex(poolInfo, !zeroForOne)
+    if (isExist) {
+      const { publicKey: address } = getPdaTickArrayAddress(
+        poolInfo.programId,
+        poolInfo.id,
+        preTick.nextStartIndex
+      );
+      allNeededAccounts.push(address)
+    }
+
     allNeededAccounts.push(nextAccountMeta);
     const {
       amountCalculated: outputAmount,
@@ -72,6 +82,16 @@ export class PoolUtils {
     const allNeededAccounts: PublicKey[] = [];
     const { isExist, startIndex: firstTickArrayStartIndex, nextAccountMeta } = this.getFirstInitializedTickArray(poolInfo, zeroForOne);
     if (!isExist || firstTickArrayStartIndex === undefined || !nextAccountMeta) throw new Error("Invalid tick array");
+
+    const preTick = this.preInitializedTickArrayStartIndex(poolInfo, !zeroForOne)
+    if (isExist) {
+      const { publicKey: address } = getPdaTickArrayAddress(
+        poolInfo.programId,
+        poolInfo.id,
+        preTick.nextStartIndex
+      );
+      allNeededAccounts.push(address)
+    }
 
     allNeededAccounts.push(nextAccountMeta);
     const {
@@ -137,5 +157,32 @@ export class PoolUtils {
       : TickUtils.searchHightBitFromStart(tickArrayBitmap, currentOffset, 1024, 1, poolInfo.tickSpacing);
 
     return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 };
+  }
+
+  public static preInitializedTickArrayStartIndex(
+    poolInfo: AmmV3PoolInfo,
+    zeroForOne: boolean) {
+    const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(
+      poolInfo.tickArrayBitmap
+    );
+    const currentOffset = TickUtils.getTickArrayOffsetInBitmapByTick(
+      poolInfo.tickCurrent,
+      poolInfo.tickSpacing
+    );
+    const result: number[] = zeroForOne ? TickUtils.searchLowBitFromStart(
+      tickArrayBitmap,
+      currentOffset - 1,
+      0,
+      1,
+      poolInfo.tickSpacing
+    ) : TickUtils.searchHightBitFromStart(
+      tickArrayBitmap,
+      currentOffset + 1,
+      1024,
+      1,
+      poolInfo.tickSpacing
+    );
+
+    return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 }
   }
 }
