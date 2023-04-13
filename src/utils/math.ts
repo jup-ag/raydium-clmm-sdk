@@ -739,21 +739,23 @@ export abstract class SwapMath {
       ++loopCount;
     }
 
-    const { tickArrayAddress, tickArrayStartTickIndex: tickAarrayStartIndex } = TickQuery.nextInitializedTickArray(
-      programId,
-      poolId,
-      tickArrayCache,
-      state.tick,
-      tickSpacing,
-      zeroForOne
-    );
-    if (
-      lastSavedTickArrayStartIndex !== tickAarrayStartIndex &&
-      tickArrayAddress
-    ) {
-      state.accounts.push(tickArrayAddress);
-      lastSavedTickArrayStartIndex = tickAarrayStartIndex;
-    }
+    try {
+      const { tickArrayAddress, tickArrayStartTickIndex: tickAarrayStartIndex } = TickQuery.nextInitializedTickArray(
+        programId,
+        poolId,
+        tickArrayCache,
+        state.tick,
+        tickSpacing,
+        zeroForOne
+      );
+      if (
+        lastSavedTickArrayStartIndex !== tickAarrayStartIndex &&
+        tickArrayAddress
+      ) {
+        state.accounts.push(tickArrayAddress);
+        lastSavedTickArrayStartIndex = tickAarrayStartIndex;
+      }
+    } catch(e) { }
     
     return {
       amountCalculated: state.amountCalculated,
