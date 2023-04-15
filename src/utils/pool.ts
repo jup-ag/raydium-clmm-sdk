@@ -33,7 +33,7 @@ export class PoolUtils {
 
     try {
       const preTick = this.preInitializedTickArrayStartIndex(poolInfo, !zeroForOne)
-      if (isExist) {
+      if (preTick.isExist) {
         const { publicKey: address } = getPdaTickArrayAddress(
           poolInfo.programId,
           poolInfo.id,
@@ -87,7 +87,7 @@ export class PoolUtils {
 
     try {
       const preTick = this.preInitializedTickArrayStartIndex(poolInfo, !zeroForOne)
-      if (isExist) {
+      if (preTick.isExist) {
         const { publicKey: address } = getPdaTickArrayAddress(
           poolInfo.programId,
           poolInfo.id,
