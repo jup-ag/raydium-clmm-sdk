@@ -12,7 +12,7 @@ import {
 
 import {
   Amm as RaydiumSdkAmm,
-  AmmV3PoolInfo,
+  ClmmPoolInfo,
 } from './amm';
 import {
   AmmV3 as AmmV3Idl,
@@ -20,6 +20,7 @@ import {
 } from './idl/amm_v3';
 import { PoolState } from './types';
 import { TickArray } from './utils/tick';
+import { getPdaExBitmapAccount } from './utils/pda';
 
 type TickArrayCache = { [key: string]: TickArray };
 
@@ -37,7 +38,7 @@ export class RaydiumSwapV3 implements Amm {
 
   tickArrayPks: PublicKey[];
   tickArrayCache: TickArrayCache = {};
-  ammV3PoolInfo: AmmV3PoolInfo | undefined;
+  ammV3PoolInfo: ClmmPoolInfo | undefined;
 
   constructor(private address: PublicKey, accountInfo: AccountInfo<Buffer>) {
     this.id = address.toBase58();
@@ -48,11 +49,11 @@ export class RaydiumSwapV3 implements Amm {
     this.poolState = this.coder.decode('poolState', accountInfo.data);
     this.reserveTokenMints = [this.poolState.tokenMint0, this.poolState.tokenMint1];
     this.programId = accountInfo.owner;
-    this.tickArrayPks = RaydiumSdkAmm.getTickArrayPks(this.address, this.poolState, this.programId);
+    this.tickArrayPks = []
   }
 
   getAccountsForUpdate() {
-    return [this.address, this.poolState.ammConfig, ...this.tickArrayPks];
+    return [this.address, this.poolState.ammConfig, getPdaExBitmapAccount(this.programId, this.address).publicKey, ...this.tickArrayPks];
   }
 
   update(accountInfoMap: Map<string, AccountInfo<Buffer>>) {
@@ -60,11 +61,14 @@ export class RaydiumSwapV3 implements Amm {
     if (!poolStateAccountInfo) throw new Error('Missing poolStateAccountInfo');
     const ammConfigAccountInfo = accountInfoMap.get(this.poolState.ammConfig.toBase58());
     if (!ammConfigAccountInfo) throw new Error('Missing ammConfigAccoutnInfo');
+    const exBitmapAccountInfo = accountInfoMap.get(getPdaExBitmapAccount(this.programId, this.address).publicKey.toBase58());
+    if (!exBitmapAccountInfo) throw new Error('Missing exBitmapAccoutnInfo');
 
     this.poolState = this.coder.decode('poolState', poolStateAccountInfo.data);
     const ammConfig = this.coder.decode('ammConfig', ammConfigAccountInfo.data);
+    const exTickArrayBitmap = this.coder.decode('tickArrayBitmapExtension', exBitmapAccountInfo.data)
 
-    this.tickArrayPks = RaydiumSdkAmm.getTickArrayPks(this.address, this.poolState, this.programId);
+    this.tickArrayPks = RaydiumSdkAmm.getTickArrayPks(this.address, this.poolState, this.programId, exTickArrayBitmap);
     const tickArrayCache: TickArrayCache = {};
     for (const tickArrayPk of this.tickArrayPks) {
       const tickArrayAccountInfo = accountInfoMap.get(tickArrayPk.toBase58());
@@ -82,6 +86,7 @@ export class RaydiumSwapV3 implements Amm {
       poolState: this.poolState,
       ammConfig,
       programId: this.programId,
+      exTickArrayBitmap,
     });
   }
 
