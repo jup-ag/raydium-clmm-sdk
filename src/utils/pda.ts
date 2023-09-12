@@ -1,13 +1,8 @@
 import { PublicKey } from '@solana/web3.js';
-
-function i32ToBytes(num: number) {
-  const arr = new ArrayBuffer(4);
-  const view = new DataView(arr);
-  view.setInt32(0, num, false);
-  return new Uint8Array(arr);
-}
+import { i32ToBytes } from './utils';
 
 const TICK_ARRAY_SEED = Buffer.from("tick_array", "utf8");
+const POOL_TICK_ARRAY_BITMAP_SEED = Buffer.from('pool_tick_array_bitmap_extension', 'utf8');
 
 function findProgramAddress(
   seeds: Array<Buffer | Uint8Array>,
@@ -30,4 +25,8 @@ export function getPdaTickArrayAddress(
     programId
   );
   return { publicKey, nonce };
+}
+
+export function getPdaExBitmapAccount(programId: PublicKey, poolId: PublicKey) {
+  return findProgramAddress([POOL_TICK_ARRAY_BITMAP_SEED, poolId.toBuffer()], programId)
 }

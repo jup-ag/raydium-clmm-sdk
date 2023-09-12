@@ -23,8 +23,11 @@ import {
   U64Resolution,
   ZERO,
 } from './constants';
-import { TickArray } from './tick';
+import { Tick, TickArray, TickUtils } from './tick';
 import { TickQuery } from './tickQuery';
+import { TickArrayBitmapExtensionLayout } from '../amm';
+import { getPdaTickArrayAddress } from './pda';
+import { PoolUtils } from './pool';
 
 export class MathUtil {
   public static mulDivRoundingUp(a: BN, b: BN, denominator: BN): BN {
@@ -606,6 +609,8 @@ export abstract class SwapMath {
     programId: PublicKey,
     poolId: PublicKey,
     tickArrayCache: { [key: string]: TickArray },
+    tickArrayBitmap: BN[],
+    tickarrayBitmapExtension: TickArrayBitmapExtensionLayout,
     zeroForOne: boolean,
     fee: number,
     liquidity: BN,
@@ -647,31 +652,61 @@ export abstract class SwapMath {
       amountSpecifiedRemaining: amountSpecified,
       amountCalculated: ZERO,
       sqrtPriceX64: currentSqrtPriceX64,
-      tick: currentTick,
+      tick:
+        currentTick > lastSavedTickArrayStartIndex
+          ? Math.min(lastSavedTickArrayStartIndex + TickQuery.tickCount(tickSpacing) - 1, currentTick)
+          : lastSavedTickArrayStartIndex,
       accounts: [] as PublicKey[],
       liquidity,
       feeAmount: new BN(0),
     };
+    let tickAarrayStartIndex = lastSavedTickArrayStartIndex;
+    let tickArrayCurrent = tickArrayCache[lastSavedTickArrayStartIndex];
     let loopCount = 0;
     while (
       !state.amountSpecifiedRemaining.eq(ZERO) &&
-      state.sqrtPriceX64 != sqrtPriceLimitX64 &&
-      state.tick < MAX_TICK &&
-      state.tick > MIN_TICK
+      !state.sqrtPriceX64.eq(sqrtPriceLimitX64)
+      // state.tick < MAX_TICK &&
+      // state.tick > MIN_TICK
     ) {
       if (loopCount > 10) {
-        throw Error("liquidity limit");
+        throw Error('liquidity limit');
       }
       const step: Partial<StepComputations> = {};
       step.sqrtPriceStartX64 = state.sqrtPriceX64;
-      const { nextTick: nextInitTick, tickArrayAddress, tickArrayStartTickIndex: tickAarrayStartIndex } = TickQuery.nextInitializedTick(
-          programId,
-          poolId,
-          tickArrayCache,
-          state.tick,
-          tickSpacing,
+
+      const tickState: Tick | null = TickUtils.nextInitTick(tickArrayCurrent, state.tick, tickSpacing, zeroForOne);
+
+      let nextInitTick: Tick | null = tickState ? tickState : null; // TickUtils.firstInitializedTick(tickArrayCurrent, zeroForOne)
+      let tickArrayAddress = null;
+
+      if (!nextInitTick?.liquidityGross.gtn(0)) {
+        const nextInitTickArrayIndex = PoolUtils.nextInitializedTickArrayStartIndex(
+          {
+            tickCurrent: state.tick,
+            tickSpacing,
+            tickArrayBitmap,
+            exBitmapInfo: tickarrayBitmapExtension,
+          },
+          tickAarrayStartIndex,
           zeroForOne
         );
+        if (!nextInitTickArrayIndex.isExist) {
+          throw Error('swapCompute LiquidityInsufficient');
+        }
+        tickAarrayStartIndex = nextInitTickArrayIndex.nextStartIndex;
+
+        const { publicKey: expectedNextTickArrayAddress } = getPdaTickArrayAddress(
+          programId,
+          poolId,
+          tickAarrayStartIndex
+        );
+        tickArrayAddress = expectedNextTickArrayAddress;
+        tickArrayCurrent = tickArrayCache[tickAarrayStartIndex];
+
+        nextInitTick = TickUtils.firstInitializedTick(tickArrayCurrent, zeroForOne);
+      }
+
       step.tickNext = nextInitTick.tick;
       step.initialized = nextInitTick.liquidityGross.gtn(0);
       if (
@@ -740,23 +775,21 @@ export abstract class SwapMath {
     }
 
     try {
-      const { tickArrayAddress, tickArrayStartTickIndex: tickAarrayStartIndex } = TickQuery.nextInitializedTickArray(
-        programId,
-        poolId,
-        tickArrayCache,
+      const { nextStartIndex: tickAarrayStartIndex } = TickQuery.nextInitializedTickArray(
         state.tick,
         tickSpacing,
-        zeroForOne
-      );
-      if (
-        lastSavedTickArrayStartIndex !== tickAarrayStartIndex &&
-        tickArrayAddress
-      ) {
-        state.accounts.push(tickArrayAddress);
-        lastSavedTickArrayStartIndex = tickAarrayStartIndex;
+        zeroForOne,
+        tickArrayBitmap,
+        tickarrayBitmapExtension,
+      )
+      if (lastSavedTickArrayStartIndex !== tickAarrayStartIndex) {
+        state.accounts.push(getPdaTickArrayAddress(programId, poolId, tickAarrayStartIndex).publicKey)
+        lastSavedTickArrayStartIndex = tickAarrayStartIndex
       }
-    } catch(e) { }
-    
+    } catch (e) {
+      /* empty */
+    }
+
     return {
       amountCalculated: state.amountCalculated,
       feeAmount: state.feeAmount,

@@ -38,7 +38,7 @@ interface ReturnTypeComputeAmountOutBaseOut {
   remainingAccounts: PublicKey[]
 }
 
-export interface AmmV3ConfigInfo {
+export interface ClmmConfigInfo {
   id: PublicKey;
   index: number;
   protocolFeeRate: number;
@@ -46,7 +46,7 @@ export interface AmmV3ConfigInfo {
   tickSpacing: number;
 }
 
-export interface AmmV3PoolRewardInfo {
+export interface ClmmPoolRewardInfo {
   rewardState: number;
   openTime: BN;
   endTime: BN;
@@ -59,7 +59,7 @@ export interface AmmV3PoolRewardInfo {
   authority: PublicKey;
   rewardGrowthGlobalX64: BN;
 }
-export interface AmmV3PoolInfo {
+export interface ClmmPoolInfo {
   id: PublicKey;
   mintA: {
     mint: PublicKey;
@@ -72,7 +72,7 @@ export interface AmmV3PoolInfo {
     decimals: number;
   };
 
-  ammConfig: AmmV3ConfigInfo;
+  ammConfig: ClmmConfigInfo;
   observationId: PublicKey;
 
   programId: PublicKey;
@@ -85,6 +85,16 @@ export interface AmmV3PoolInfo {
   observationIndex: number;
   observationUpdateDuration: number;
   tickArrayBitmap: BN[];
+
+  exBitmapInfo: TickArrayBitmapExtensionLayout;
+}
+export interface TickArrayBitmapExtensionLayout {
+  poolId: PublicKey
+  positiveTickArrayBitmap: BN[][]
+  negativeTickArrayBitmap: BN[][]
+}
+export interface ReturnTypeFetchExBitmaps {
+  [exBitmapId: string]: TickArrayBitmapExtensionLayout
 }
 
 export class Amm {
@@ -96,7 +106,7 @@ export class Amm {
     slippage,
     priceLimit = new Decimal(0),
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     tickArrayCache: { [key: string]: TickArrayState & { address: PublicKey } };
     baseMint: PublicKey;
 
@@ -156,7 +166,7 @@ export class Amm {
 
   static computeAmountIn(
     { poolInfo, tickArrayCache, baseMint, amountOut, slippage, priceLimit = new Decimal(0) }: {
-      poolInfo: AmmV3PoolInfo,
+      poolInfo: ClmmPoolInfo,
       tickArrayCache: { [key: string]: TickArrayState & { address: PublicKey } },
       baseMint: PublicKey,
 
@@ -207,8 +217,7 @@ export class Amm {
     }
   }
 
-  static getTickArrayPks(address: PublicKey, poolState: PoolState, programId: PublicKey): PublicKey[] {
-    const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(poolState.tickArrayBitmap);
+  static getTickArrayPks(address: PublicKey, poolState: PoolState, programId: PublicKey, exTickArrayBitmap: TickArrayBitmapExtensionLayout): PublicKey[] {
     const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
       poolState.tickCurrent,
       poolState.tickSpacing
@@ -216,7 +225,8 @@ export class Amm {
 
     const tickArrayPks: PublicKey[] = [];
     const startIndexArray = TickUtils.getInitializedTickArrayInRange(
-      tickArrayBitmap,
+      poolState.tickArrayBitmap,
+      exTickArrayBitmap,
       poolState.tickSpacing,
       currentTickArrayStartIndex,
       Math.floor(FETCH_TICKARRAY_COUNT / 2)
@@ -233,12 +243,14 @@ export class Amm {
     poolState,
     ammConfig,
     programId,
+    exTickArrayBitmap,
   }: {
     address: PublicKey;
     poolState: PoolState;
     ammConfig: AmmConfig;
     programId: PublicKey;
-  }): AmmV3PoolInfo {
+    exTickArrayBitmap: TickArrayBitmapExtensionLayout
+  }): ClmmPoolInfo {
     return {
       id: address,
       mintA: {
@@ -271,6 +283,8 @@ export class Amm {
       observationIndex: poolState.observationIndex,
       observationUpdateDuration: poolState.observationUpdateDuration,
       tickArrayBitmap: poolState.tickArrayBitmap,
+
+      exBitmapInfo: exTickArrayBitmap,
     };
   }
 }
